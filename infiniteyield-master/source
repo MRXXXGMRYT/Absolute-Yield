@@ -13408,46 +13408,6 @@ end)
 task.wait(0.15)
 
 -- ---------------------------------------------------------------------------
--- 0. Robust loadstring helper (makes any script loadstring-compatible)
--- ---------------------------------------------------------------------------
-local function safeLoadstring(url, scriptName)
-	local ok, result
-	local code = nil
-
-	-- Fetch the script source
-	pcall(function()
-		code = game:HttpGet(url)
-	end)
-
-	if not code or code == "" then
-		warn("[IY-WindUI] Failed to fetch: " .. tostring(scriptName or url))
-		return nil
-	end
-
-	-- Try loadstring first (standard Roblox)
-	local fn, err = loadstring(code)
-	if not fn then
-		-- Fallback to 'load' if loadstring is unavailable
-		local ok2, result2 = pcall(function() return load(code) end)
-		if ok2 and type(result2) == "function" then
-			fn = result2
-		else
-			warn("[IY-Windui] loadstring/load failed for " .. tostring(scriptName or url) .. ": " .. tostring(err))
-			return nil
-		end
-	end
-
-	-- Execute the loaded function
-	ok, result = pcall(function() return fn() end)
-	if not ok then
-		warn("[IY-Windui] Execution failed for " .. tostring(scriptName or url) .. ": " .. tostring(result))
-		return nil
-	end
-
-	return result
-end
-
--- ---------------------------------------------------------------------------
 -- 1. Hide IY's original UI elements (keep Cmdbar + CMDsF alive for /cmdbar
 --    and chat execution). All other IY-drawn GUIs are hidden.
 -- ---------------------------------------------------------------------------
@@ -13505,27 +13465,9 @@ if Cmdbar then Cmdbar.PlaceholderText = "Command Bar (/)" end
 -- ---------------------------------------------------------------------------
 -- 3. Load WindUI
 -- ---------------------------------------------------------------------------
-local WindUI = nil
-local loadErrors = {}
-
-local function tryRequire(path)
-	local ok, result = pcall(function()
-		return require(path)
-	end)
-	if ok then return result end
-	table.insert(loadErrors, path .. ": " .. tostring(result))
-	return nil
-end
-
--- ---------------------------------------------------------------------------
--- 3. Load WindUI
--- ---------------------------------------------------------------------------
--- LOADSTRING URL (when pushing to GitHub):
---   https://raw.githubusercontent.com/USERNAME/REPO/main/infiniteyield-master/source
---
 -- WindUI must be available as ModuleScripts in the game.
--- For loadstring deployment, place WindUI in ReplicatedStorage as a folder
--- named "WindUI" with src/Init.lua as the entry point.
+-- Place the WindUI folder in ReplicatedStorage or ServerStorage.
+-- The wrapper tries ReplicatedStorage first, then ServerStorage, then relative paths.
 -- ---------------------------------------------------------------------------
 local WindUI = nil
 local loadErrors = {}
@@ -13539,8 +13481,7 @@ local function tryRequire(path)
 	return nil
 end
 
--- Try absolute paths first (work with loadstring deployment when WindUI is
--- in ReplicatedStorage), then relative paths (work in Studio).
+-- Try absolute paths first (work with loadstring deployment), then relative paths (Studio).
 local candidatePaths = {
 	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI')",
 	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI'):WaitForChild('src'):WaitForChild('Init')",
@@ -13563,62 +13504,6 @@ local function diagLog(level, msg, fix)
 	print(string.format("[IY-WindUI][%s] %s%s", level, msg, fix ~= "" and (" | FIX: " .. fix) or ""))
 end
 
-local GITHUB_USER = "MRXXXGMRYT"
-local GITHUB_REPO = "Absolute-Yield"
-local GITHUB_REF = "main"
-
-local function downloadWindUIToReplicatedStorage()
-	-- Try to download the full WindUI Init.lua and place it in ReplicatedStorage
-	-- so require() can find it automatically.
-	local success, result = pcall(function()
-		local HttpService = game:GetService("HttpService")
-		local ReplicatedStorage = game:GetService("ReplicatedStorage")
-
-		-- Download Init.lua
-		local initUrl = string.format(
-			"https://raw.githubusercontent.com/%s/%s/%s/WindUI/src/Init.lua",
-			GITHUB_USER, GITHUB_REPO, GITHUB_REF
-		)
-		local initCode = game:HttpGet(initUrl)
-		if not initCode or initCode == "" then
-			return false, "Init.lua download failed"
-		end
-
-		-- Create WindUI folder in ReplicatedStorage
-		local winduiFolder = ReplicatedStorage:FindFirstChild("WindUI")
-		if not winduiFolder then
-			winduiFolder = Instance.new("Folder")
-			winduiFolder.Name = "WindUI"
-			winduiFolder.Parent = ReplicatedStorage
-		end
-
-		local srcFolder = winduiFolder:FindFirstChild("src")
-		if not srcFolder then
-			srcFolder = Instance.new("Folder")
-			srcFolder.Name = "src"
-			srcFolder.Parent = winduiFolder
-		end
-
-		local initModule = srcFolder:FindFirstChild("Init")
-		if not initModule then
-			initModule = Instance.new("ModuleScript")
-			initModule.Name = "Init"
-			initModule.Parent = srcFolder
-		end
-		initModule.Source = initCode
-
-		return true, "WindUI placed in ReplicatedStorage"
-	end)
-
-	if success then
-		diagLog("INFO", "Auto-installed WindUI into ReplicatedStorage", "Require should now work on next run")
-		return true
-	else
-		diagLog("WARN", "Auto-install to ReplicatedStorage failed: " .. tostring(result), "WindUI may not be in the game")
-		return false
-	end
-end
-
 -- Step 1: Try local require paths
 for _, path in ipairs(candidatePaths) do
 	WindUI = tryRequire(path)
@@ -13628,50 +13513,19 @@ for _, path in ipairs(candidatePaths) do
 	end
 end
 
--- Step 2: If not loaded, try to auto-install WindUI into ReplicatedStorage from GitHub
+-- Step 2: If not loaded, try to place WindUI folder stub in ReplicatedStorage
+-- (helps require() find it if WindUI was added as a folder but not as ModuleScript)
 if not WindUI then
-	diagLog("INFO", "WindUI not found locally; attempting auto-install from GitHub raw...")
-	if downloadWindUIToReplicatedStorage() then
-		-- Retry require after auto-install
-		task.wait(0.5)
-		for _, path in ipairs(candidatePaths) do
-			WindUI = tryRequire(path)
-			if WindUI then
-				diagLog("INFO", "WindUI loaded after auto-install: " .. tostring(path))
-				break
-			end
-		end
+	local rs = game:GetService("ReplicatedStorage")
+	local winduiFolder = rs:FindFirstChild("WindUI")
+	if winduiFolder and winduiFolder:IsA("Folder") then
+		diagLog("INFO", "WindUI folder found in ReplicatedStorage but no Init ModuleScript", "Add WindUI/src/Init.lua ModuleScript")
 	end
 end
 
--- Step 3: Last resort - load Init.lua directly from GitHub raw via loadstring
+-- Step 3: Final failure - detailed diagnostics
 if not WindUI then
-	diagLog("INFO", "Attempting direct loadstring from GitHub raw...")
-	local winduiInitUrl = string.format(
-		"https://raw.githubusercontent.com/%s/%s/%s/WindUI/src/Init.lua",
-		GITHUB_USER, GITHUB_REPO, GITHUB_REF
-	)
-	local ok, result = pcall(function()
-		local code = game:HttpGet(winduiInitUrl)
-		if code and code ~= "" then
-			local fn = loadstring(code)
-			if type(fn) == "function" then
-				return fn()
-			end
-		end
-		return nil
-	end)
-	if ok and result then
-		WindUI = result
-		diagLog("INFO", "WindUI loaded via GitHub raw loadstring", "No local files needed")
-	else
-		diagLog("ERROR", "GitHub raw loadstring failed: " .. winduiInitUrl, "Check internet/GH raw access")
-	end
-end
-
--- Step 4: Final failure - detailed diagnostics
-if not WindUI then
-	diagLog("ERROR", "WindUI could not be loaded after all attempts", "")
+	diagLog("ERROR", "WindUI could not be loaded", "")
 
 	print("\n========== [IY-WindUI] DIAGNOSTICS ==========")
 	for _, d in ipairs(diag) do
@@ -13682,6 +13536,8 @@ if not WindUI then
 	for _, err in ipairs(loadErrors) do
 		print("  - " .. err)
 	end
+	print("\nFIX: Place the WindUI folder in ReplicatedStorage or ServerStorage.")
+	print("     Required structure: WindUI/src/Init.lua (ModuleScript)")
 	print("============================================\n")
 
 	warn("Infinite Yield will continue with engine-only mode (no WindUI UI).")
@@ -15157,71 +15013,10 @@ aliasTab:Button({
 })
 
 -- ---------------------------------------------------------------------------
--- 11.5. Load default plugins from @plugins\
+-- Built-in Plugins (Find Places, Server Directory)
+-- These are integrated as WindUI tabs above. No separate .iy plugin loading needed.
 -- ---------------------------------------------------------------------------
-local function loadDefaultPlugins()
-	-- List of .iy plugin files to auto-load from @plugins\
-	local defaultPlugins = {
-		"@plugins\\dexrecontinued.iy",
-		"@plugins\\fakelag.iy",
-		"@plugins\\jobid.iy",
-		"@plugins\\mfreecam.iy",
-		"@plugins\\mousetools.iy",
-		"@plugins\\pathbuilder.iy",
-		"@plugins\\pluginstore2.iy",
-		"@plugins\\ServerDirectory.iy",
-		"@plugins\\sussy.iy",
-		"@plugins\\translator.iy",
-	}
 
-	for _, pluginPath in ipairs(defaultPlugins) do
-		task.spawn(function()
-			-- Check if already loaded
-			local alreadyLoaded = false
-			if PluginsTable then
-				for _, v in pairs(PluginsTable) do
-					if v == pluginPath then
-						alreadyLoaded = true
-						break
-					end
-				end
-			end
-
-			if not alreadyLoaded then
-				-- Try to read and load the plugin
-				local file
-				pcall(function()
-					file = readfile(pluginPath)
-				end)
-
-				if file then
-					if not FindInTable(PluginsTable, pluginPath) then
-						table.insert(PluginsTable, pluginPath)
-						LoadPlugin(pluginPath)
-						if isFunction(refreshplugins) then refreshplugins() end
-						notify("Default Plugin Loaded", pluginPath:match("([^\\]+)$") or pluginPath, 3)
-					end
-				else
-					notify("Plugin Not Found", "Could not load: " .. pluginPath, 3)
-				end
-			end
-		end)
-	end
-
-	-- Refresh command UI after plugins load
-	task.spawn(function()
-		task.wait(2)
-		if isFunction(buildAllCommands) then
-			buildAllCommands()
-		end
-	end)
-end
-
--- Load default plugins after IY engine is ready
-task.spawn(loadDefaultPlugins)
-
--- ---------------------------------------------------------------------------
--- 11.6. Dedicated WindUI Tabs (ServerDirectory, Find Places, PluginStore)
 -- These replace the plugins' own commands/UI with our WindUI interface.
 -- ---------------------------------------------------------------------------
 
@@ -15311,12 +15106,11 @@ fpTab:Button({
 	Callback = function()
 		notify("Find Places", "Loading place finder...", 3)
 		task.spawn(function()
-			local result = safeLoadstring(
-				"https://raw.githubusercontent.com/ACEtheSOLID/NoobyHub-Reborn/refs/heads/main/FindPlaces-v0.2.lua",
-				"Find Places"
-			)
-			if not result then
-				notify("Find Places", "Failed to load Find Places script", 3)
+			local ok, err = pcall(function()
+				loadstring(game:HttpGet("https://raw.githubusercontent.com/ACEtheSOLID/NoobyHub-Reborn/refs/heads/main/FindPlaces-v0.2.lua"))()
+			end)
+			if not ok then
+				notify("Find Places", "Failed to load: " .. tostring(err), 3)
 			end
 		end)
 	end,
@@ -15331,25 +15125,18 @@ psTab:Paragraph({
 	Desc = "Browse and load additional Infinite Yield plugins.",
 })
 
-psTab:Button({
-	Title = "Open Plugin Store",
-	Icon = "external-link",
-	Callback = function()
-		notify("Plugin Store", "Loading store...", 3)
-		task.spawn(function()
-			local result = safeLoadstring(
-				"https://raw.githubusercontent.com/CarlDV/InfiniteYieldPluginStore/refs/heads/main/loader.lua",
-				"Plugin Store"
-			)
-			if not result then
-				notify("Plugin Store", "Failed to load Plugin Store script", 3)
-			end
-		end)
-	end,
+psTab:Paragraph({
+	Title = "Built-in Plugins",
+	Desc = "Find Places and Server Directory are integrated as WindUI tabs above.",
+})
+
+psTab:Paragraph({
+	Title = "Additional Plugins",
+	Desc = "Add .iy files to the @plugins\\ folder and use /addplugin to load them.",
 })
 
 psTab:Button({
-	Title = "Refresh Installed Plugins",
+	Title = "Refresh Plugin List",
 	Icon = "refresh-cw",
 	Callback = function()
 		if isFunction(buildAllCommands) then
@@ -15357,11 +15144,6 @@ psTab:Button({
 		end
 		notify("Plugin Store", "Plugin list refreshed", 3)
 	end,
-})
-
-psTab:Paragraph({
-	Title = "Loaded Plugins",
-	Desc = "Plugins loaded from @plugins\\ folder.",
 })
 
 -- ===== ServerDirectory Plugin Command Integration =====
