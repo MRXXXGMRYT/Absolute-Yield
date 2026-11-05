@@ -1,4 +1,3 @@
-<IY>
 if IY_LOADED and not _G.IY_DEBUG then
 	-- error("Infinite Yield is already running!", 0)
 	return
@@ -364,9 +363,9 @@ Title.Text = "Infinite Yield FE v" .. currentVersion
 
 do
 	local emoji = ({
-		["01 01"] = "üéÜ",
-		["02 14"] = "üíù",
-		["03 17"] = "‚òòÔ∏è",
+		["01 01"] = "=ÉƒÂ",
+		["02 14"] = "=É∆•",
+		["03 17"] = "Gˇˇn+≈",
 		[(function(Year)
 			local A = math.floor(Year/100)
 			local B = math.floor((13+8*A)/25)
@@ -383,9 +382,9 @@ do
 				return ("04 %02d"):format(G-31)
 			end
 			return ("03 %02d"):format(G)
-		end)(tonumber(os.date"%Y"))] = "ü•ö",
-		["10 31"] = "üéÉ",
-		["12 25"] = "üéÑ"
+		end)(tonumber(os.date"%Y"))] = "=É—‹",
+		["10 31"] = "=Éƒ‚",
+		["12 25"] = "=Éƒ‰"
 	})[os.date("%m %d")]
 	if emoji then
 		Title.Text = ("%s %s %s"):format(emoji, Title.Text, emoji)
@@ -13394,21 +13393,15 @@ task.spawn(function()
     IntroBackground:Destroy()
     minimizeHolder()
 end)
-
-</IY>
-<our_code>
---[[ <our_code> ]]
 -- ============================================================================
--- WindUI Integration Wrapper for Infinite Yield
+-- Infinite Yield Plugin for WindUI
 -- Default prefix: /
--- All IY UI removed; WindUI provides the interface.
--- Chat execution (do_exec / Chatted hook) is left untouched.
+-- All UI rendered via WindUI. IY engine embedded for command execution.
+-- Load via: loadstring(game:HttpGet(".../source"))()
 -- ============================================================================
-
-task.wait(0.15)
 
 -- ---------------------------------------------------------------------------
--- 1. Hide IY's original UI elements (keep Cmdbar + CMDsF alive for /cmdbar
+-- 0. Hide IY's original UI elements (keep Cmdbar + CMDsF alive for /cmdbar
 --    and chat execution). All other IY-drawn GUIs are hidden.
 -- ---------------------------------------------------------------------------
 local function hideIYUI()
@@ -13422,7 +13415,6 @@ local function hideIYUI()
 		end
 	end
 
-	-- Settings sub-frames
 	for _, name in ipairs({
 		"SettingsHolder", "KeybindsFrame", "PositionsFrame",
 		"AliasesFrame", "PluginsFrame",
@@ -13431,22 +13423,18 @@ local function hideIYUI()
 		if elem then elem.Visible = false end
 	end
 
-	-- Color picker popup if open
 	if picker and picker:IsA("GuiObject") then
 		picker.Visible = false
 	end
 
-	-- eventEditor frame
 	if eventEditor and eventEditor.Frame then
 		eventEditor.Frame.Visible = false
 	end
 
-	-- reference frame
 	if reference and type(reference) == "table" and reference.main then
 		reference.main.Visible = false
 	end
 
-	-- IY intro logo/credits get cleaned up by IY itself; hide just in case
 	for _, name in ipairs({"Logo", "Credits", "IntroBackground"}) do
 		local elem = _G[name] or Holder:FindFirstChild(name)
 		if elem then elem.Visible = false end
@@ -13456,18 +13444,14 @@ end
 hideIYUI()
 
 -- ---------------------------------------------------------------------------
--- 2. Default prefix -> /
+-- 1. Default prefix -> /
 -- ---------------------------------------------------------------------------
 prefix = "/"
 if PrefixBox then PrefixBox.Text = "/" end
 if Cmdbar then Cmdbar.PlaceholderText = "Command Bar (/)" end
 
 -- ---------------------------------------------------------------------------
--- 3. Load WindUI
--- ---------------------------------------------------------------------------
--- WindUI must be available as ModuleScripts in the game.
--- Place the WindUI folder in ReplicatedStorage or ServerStorage.
--- The wrapper tries ReplicatedStorage first, then ServerStorage, then relative paths.
+-- 2. Load WindUI
 -- ---------------------------------------------------------------------------
 local WindUI = nil
 local loadErrors = {}
@@ -13481,7 +13465,7 @@ local function tryRequire(path)
 	return nil
 end
 
--- Try absolute paths first (work with loadstring deployment), then relative paths (Studio).
+-- Try ReplicatedStorage first (plugin deployment), then ServerStorage, then relative paths
 local candidatePaths = {
 	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI')",
 	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI'):WaitForChild('src'):WaitForChild('Init')",
@@ -13494,825 +13478,46 @@ local candidatePaths = {
 	"src/Init",
 }
 
--- ---------------------------------------------------------------------------
--- WindUI Loader with diagnostics (reports to Roblox console)
--- ---------------------------------------------------------------------------
-local diag = {} -- diagnostic messages printed to console at the end
-
-local function diagLog(level, msg, fix)
-	table.insert(diag, {level = level, msg = msg, fix = fix or ""})
-	print(string.format("[IY-WindUI][%s] %s%s", level, msg, fix ~= "" and (" | FIX: " .. fix) or ""))
-end
-
--- Step 1: Try local require paths
-for _, path in ipairs(candidatePaths) do
-	WindUI = tryRequire(path)
-	if WindUI then
-		diagLog("INFO", "WindUI loaded via require: " .. tostring(path))
-		break
-	end
-end
-
--- Step 2: If not loaded, try to place WindUI folder stub in ReplicatedStorage
--- (helps require() find it if WindUI was added as a folder but not as ModuleScript)
-if not WindUI then
-	local rs = game:GetService("ReplicatedStorage")
-	local winduiFolder = rs:FindFirstChild("WindUI")
-	if winduiFolder and winduiFolder:IsA("Folder") then
-		diagLog("INFO", "WindUI folder found in ReplicatedStorage but no Init ModuleScript", "Add WindUI/src/Init.lua ModuleScript")
-	end
-end
-
--- Step 3: Final failure - detailed diagnostics
-if not WindUI then
-	diagLog("ERROR", "WindUI could not be loaded", "")
-
-	print("\n========== [IY-WindUI] DIAGNOSTICS ==========")
-	for _, d in ipairs(diag) do
-		print(string.format("[%s] %s%s", d.level, d.msg, d.fix ~= "" and ("  -> " .. d.fix) or ""))
-	end
-	print("--------------------------------------------")
-	print("LOAD ERRORS (require attempts):")
-	for _, err in ipairs(loadErrors) do
-		print("  - " .. err)
-	end
-	print("\nFIX: Place the WindUI folder in ReplicatedStorage or ServerStorage.")
-	print("     Required structure: WindUI/src/Init.lua (ModuleScript)")
-	print("============================================\n")
-
-	warn("Infinite Yield will continue with engine-only mode (no WindUI UI).")
-	warn("Commands still work via /cmdbar or chat, but WindUI interface is unavailable.")
-	return
-end
-
-diagLog("INFO", "WindUI ready. Initializing interface...")
-
--- ---------------------------------------------------------------------------
--- 4. Create WindUI Window
--- ---------------------------------------------------------------------------
-local Window = WindUI:CreateWindow({
-	Title = "Infinite Yield v" .. tostring(currentVersion or "6.4.2"),
-	Theme = "Dark",
-	HideSearchBar = false,
-	SideBarWidth = 220,
-	OpenButton = {
-		Title = "IY",
-		Enabled = true,
-		OnlyMobile = false,
-		Color = ColorSequence.new(Color3.fromHex("#00ff00"), Color3.fromHex("#00aa00")),
-	},
-	User = {
-		Enabled = true,
-		Anonymous = true,
-		Callback = function()
-			WindUI:Notify({ Title = "Infinite Yield", Content = "User profile", Duration = 2 })
-		end,
-	},
-})
-
--- ---------------------------------------------------------------------------
--- 5. Command metadata & categorisation
--- ---------------------------------------------------------------------------
--- Known toggleable pairs: on-command -> off-command
-local togglePairs = {
-	fly = "unfly",
-	noclip = "unnoclip",
-	esp = "noesp",
-	espteam = "noesp",
-	chams = "nochams",
-	xray = "unxray",
-	loopxray = "unloopxray",
-	togglexray = nil, -- self-toggling
-	fullbright = "unloopfullbright",
-	loopfullbright = "unloopfullbright",
-	fling = "unfling",
-	togglefling = nil,
-	walkfling = "unwalkfling",
-	togglewalkfling = nil,
-	antifling = "unantifling",
-	toggleantifling = nil,
-	swim = "unswim",
-	toggleswim = nil,
-	float = "unfloat",
-	togglefloat = nil,
-	cloaked = nil, -- placeholder
-	invisible = "visible",
-	toggleinvis = nil,
-	clip = "noclip",
-	unnoclip = "noclip",
-	togglenoclip = nil,
-	freezeunanchored = "thawunanchored",
-	antivoid = "unantivoid",
-	loopfullbright = "unloopfullbright",
-	spin = "unspin",
-	loopanimation = "stopanimations",
-	noanim = "reanim",
-	infjump = "uninfjump",
-	flyjump = "unflyjump",
-	autojump = "unautojump",
-	edgejump = "unedgejump",
-	platformstand = "unplatformstand",
-	norotate = "unnorotate",
-	align = nil,
-	nobgui = "unloopnobgui",
-	loopnobgui = "unloopnobgui",
-	bubblechat = "unbubblechat",
-	chatwindow = "unchatwindow",
-	autoclick = "unautoclick",
-	autokeypress = "unautokeypress",
-	hovername = "unhovername",
-	walltp = "unwalltp",
-	clicktp = nil, -- keybind-based
-	clickdelete = nil, -- keybind-based
-	camera = nil,
-	noclipcam = nil,
-	freecam = "unfreecam",
-	togglexray = nil,
-	togglefly = nil,
-	togglevfly = nil,
-}
-
--- Known command -> description (used when IY DESC is empty)
-local commandDescs = {
-	fly = "Makes you fly",
-	unfly = "Disables fly",
-	flyspeed = "Set fly speed",
-	vfly = "Vehicle fly",
-	unvfly = "Disable vehicle fly",
-	noclip = "Go through objects",
-	clip = "Disable noclip",
-	esp = "View all players and their status",
-	noesp = "Removes ESP",
-	xray = "Makes all parts transparent",
-	unxray = "Restore transparency",
-	fullbright = "Makes map brighter",
-	unloopfullbright = "Stop looped fullbright",
-	speed = "Change walkspeed",
-	jumppower = "Change jump height",
-	gravity = "Change gravity",
-	reset = "Reset your character",
-	respawn = "Respawn you",
-	god = "God mode",
-	invisible = "Make yourself invisible",
-	visible = "Make yourself visible",
-	goto = "Go to a player",
-	waypoint = "Teleport to a waypoint",
-	setwaypoint = "Set a waypoint",
-	rejoin = "Rejoin the server",
-	serverhop = "Hop to another server",
-	chat = "Chat a message",
-	spam = "Spam chat",
-	notify = "Send a notification",
-	freecam = "Free camera",
-	admin = nil,
-}
-
--- ---------------------------------------------------------------------------
--- 6. Build command UI from IY's cmds table
--- ---------------------------------------------------------------------------
-local function getCmdDesc(cmdEntry)
-	if cmdEntry.DESC and cmdEntry.DESC ~= "" then
-		return cmdEntry.DESC
-	end
-	local name = cmdEntry.NAME:match("([^ ]+)") or cmdEntry.NAME
-	return commandDescs[name:lower()] or "Run the " .. name .. " command"
-end
-
-local function isToggleOn(cmdName)
-	-- Heuristic: check if command name matches an active IY state variable
-	local stateVars = {
-		["fly"] = FLYING,
-		["noclip"] = (Clip == false),
-		["esp"] = ESPenabled,
-		["chams"] = CHMSenabled,
-		["xray"] = xrayEnabled,
-		["fullbright"] = nil, -- no direct var
-		["fling"] = flinging,
-		["swim"] = swimming,
-		["float"] = floating,
-		["invisible"] = invisRunning,
-		["antifling"] = antifling ~= nil,
-		["loopanimation"] = nil,
-	}
-	return stateVars[cmdName:lower()]
-end
-
-local function execCommand(cmdStr)
-	execCmd(cmdStr, Players.LocalPlayer, true)
-end
-
-local function resolvePlayers(argStr, speaker)
-	if not argStr or argStr == "" then
-		return {speaker.Name}
-	end
-	return getPlayer(argStr, speaker)
-end
-
-local function buildCommandTabs()
-	-- Collect all commands from cmds + customAlias + plugin commands
-	local allCmds = {}
-	for _, cmd in pairs(cmds) do
-		table.insert(allCmds, cmd)
-	end
-	-- Add custom aliases as entries too
-	for aliasName, cmdEntry in pairs(customAlias) do
-		table.insert(allCmds, {
-			NAME = aliasName,
-			ALIAS = {},
-			FUNC = cmdEntry.FUNC,
-			PLUGIN = cmdEntry.PLUGIN,
-			DESC = "Alias for " .. cmdEntry.NAME,
-		})
-	end
-
-	-- Sort by name
-	table.sort(allCmds, function(a, b)
-		return a.NAME:lower() < b.NAME:lower()
-	end)
-
-	-- Categorise
-	local categories = {
-		{id = "movement", title = "Movement", icon = "activity", cmds = {}},
-		{id = "teleport", title = "Teleport", icon = "corner-right-up", cmds = {}},
-		{id = "player", title = "Player", icon = "user", cmds = {}},
-		{id = "visuals", title = "Visuals", icon = "eye", cmds = {}},
-		{id = "fun", title = "Fun", icon = "smile", cmds = {}},
-		{id = "chat", title = "Chat", icon = "message-circle", cmds = {}},
-		{id = "server", title = "Server", icon = "server", cmds = {}},
-		{id = "client", title = "Client", icon = "monitor", cmds = {}},
-		{id = "character", title = "Character", icon = "body", cmds = {}},
-		{id = "animation", title = "Animation", icon = "film", cmds = {}},
-		{id = "tools", title = "Tools", icon = "tool", cmds = {}},
-		{id = "waypoints", title = "Waypoints", icon = "map-pin", cmds = {}},
-		{id = "keybinds", title = "Keybinds", icon = "key", cmds = {}},
-		{id = "plugins", title = "Plugins", icon = "plug", cmds = {}},
-		{id = "settings", title = "Settings", icon = "sliders", cmds = {}},
-	}
-
-	local keywordMap = {
-		movement = {"fly", "speed", "walk", "jump", "swim", "float", "noclip", "clip", "spin", "sit", "lay", "platform", "gravity", "hipheight", "flyspeed", "vfly", "fling", "walkfling", "orbit", "stun", "norotate", "breakvelocity", "anchor", "unanchor", "freeze", "thaw", "reach", "grippos", "infjump", "flyjump", "autojump", "edgejump", "nosit", "togglenoclip", "togglefly", "toggleswim", "togglefloat", "toggleinvis", "toggleantifling", "togglefling", "togglewalkfling"},
-		teleport = {"goto", "tppos", "tweentppos", "offset", "thru", "tptool", "tpwalk", "waypoint", "waypoints", "setwaypoint", "showwaypoints", "hidewaypoints", "deletewaypoint", "clearwaypoints", "gotocamera", "freecam", "freecamgoto", "freecampos", "bringpart", "tpunanchored", "flashback", "walltp", "mouseteleport", "clickteleport", "tweengotocamera", "pulsetp", "loopgoto", "clientbring", "loopbring", "vehiclegoto", "tweengoto"},
-		player = {"esp", "locate", "view", "spectate", "inspect", "age", "userid", "appearanceid", "ping", "notifyposition", "copyposition", "headsize", "hitbox", "friend", "unfriend", "headsit", "walkto", "follow", "stareat", "chams", "partesp", "locate", "nolocate", "unview", "listento", "mutevc", "unmutevc", "muteallvoices", "unmuteallvoices"},
-		visuals = {"xray", "unxray", "fullbright", "ambient", "day", "night", "nofog", "brightness", "globalshadows", "restorelighting", "light", "nolight", "invisibleparts", "uninvisibleparts", "invisible", "visible", "toolinvisible", "naked", "noface", "blockhead", "blockhats", "drophats", "deletehats", "chams", "nochams", "esp", "noesp", "espteam", "xray", "loopxray", "unloopxray", "togglexray", "esptransparency"},
-		fun = {"bang", "jerk", "scare", "spook", "carpet", "spasm", "headthrow", "dance", "undance", "animation", "emote", "creeper", "split", "nilchar", "unnilchar", "noroot", "replaceroot", "unspasm", "nospasm", "unanimation"},
-		chat = {"chat", "say", "spam", "unspam", "whisper", "pm", "pmspam", "nopmspam", "spamspeed", "chatage", "chatjoindate", "bubblechat", "unbubblechat", "chatwindow", "unchatwindow", "darkchat", "notify", "lastcommand", "chatlogs", "joinlogs", "chatlogswebhook"},
-		server = {"rejoin", "serverhop", "serverinfo", "jobid", "notifyjobid", "autorejoin", "inviteprompt", "exit", "antiafk", "datalimit", "replicationlag", "antilag", "setfpscap", "volume", "cancelteleport", "clientantikick", "clientantiteleport", "allowrejoin", "savegame", "clearerror", "antigameplaypaused", "unantigameplaypaused", "removeads", "adblock"},
-		client = {"btools", "f3x", "explorer", "dex", "moondex", "remotespy", "simplespy", "audiologger", "console", "oldconsole", "delete", "deleteclass", "guidelete", "unguidelete", "showguis", "hideguis", "unhideguis", "togglefullscreen", "record", "screenshot", "noclipcam", "maxzoom", "minzoom", "camdistance", "fov", "fixcam", "enableshiftlock", "firstp", "thirdp", "lookat", "ctrllock", "unctrllock", "alignmentkeys", "mousesensitivity", "hovername", "nobgui", "team", "promptr6", "promptr15"},
-		character = {"reset", "respawn", "refresh", "god", "invisible", "visible", "toolinvisible", "speed", "jumppower", "jump", "infjump", "flyjump", "sit", "lay", "sitwalk", "nosit", "platformstand", "norotate", "gravity", "hipheight", "anchor", "unanchor", "freeze", "thaw", "clearcharappearance", "tools", "notools", "droptools", "equiptools", "unequiptools", "copytools", "dupetools", "reach", "boxreach", "grippos", "usetools", "spawnpoint", "nospawnpoint", "strengthen", "weaken", "unweaken", "breakvelocity"},
-		animation = {"animation", "anim", "emote", "dance", "undance", "spasm", "unspasm", "noanim", "reanim", "animspeed", "loopanimation", "stopanimations", "refreshanimations", "copyanimation", "copyanimationid", "allowcustomanim", "unallowcustomanim", "freezeanims", "unfreezeanims"},
-		tools = {"tools", "notools", "droptools", "equiptools", "unequiptools", "copytools", "dupetools", "deleteselectedtool", "grabtools", "ungrabtools", "reach", "boxreach", "grippos", "usetools", "removespecifictool", "unremovespecifictool", "clearremovespecifictool"},
-		waypoints = {"setwaypoint", "waypointpos", "waypoints", "showwaypoints", "hidewaypoints", "waypoint", "tweenwaypoint", "walktowaypoint", "deletewaypoint", "clearwaypoints", "cleargamewaypoints"},
-		keybinds = {},
-		plugins = {"addplugin", "removeplugin", "reloadplugin", "addallplugins"},
-		settings = {"prefix", "guiscale", "hideiy", "showiy", "keepiy", "unkeepiy", "togglekeepiy", "logs", "chatlogs", "joinlogs", "debug"},
-	}
-
-	for _, cmd in ipairs(allCmds) do
-		local name = cmd.NAME:lower()
-		local placed = false
-		for _, cat in ipairs(categories) do
-			for _, kw in ipairs(keywordMap[cat.id] or {}) do
-				if name == kw:lower() or name:find(kw:lower(), 1, true) then
-					table.insert(cat.cmds, cmd)
-					placed = true
-					break
-				end
-			end
-			if placed then break end
-		end
-		if not placed then
-			table.insert(categories[1].cmds, cmd) -- default to Movement
-		end
-	end
-
-	-- Remove empty categories
-	local nonEmpty = {}
-	for _, cat in ipairs(categories) do
-		if #cat.cmds > 0 then
-			table.insert(nonEmpty, cat)
-		end
-	end
-	categories = nonEmpty
-
-	-- Create UI sections and tabs
-	local cmdSection = Window:Section({ Title = "Commands", Opened = true })
-
-	for _, cat in ipairs(categories) do
-		local tab = cmdSection:Tab({ Title = cat.title, Icon = cat.icon })
-
-		for _, cmd in ipairs(cat.cmds) do
-			local cmdName = cmd.NAME
-			local cmdLower = cmdName:lower()
-			local desc = getCmdDesc(cmd)
-			local aliases = #cmd.ALIAS > 0 and (" (aliases: " .. table.concat(cmd.ALIAS, ", ") .. ")") or ""
-
-			-- Determine if this is a toggleable command
-			local offCmd = togglePairs[cmdLower]
-			local isToggleCmd = offCmd ~= nil or cmdLower:find("^un") or cmdLower:find("^no") or cmdLower:find("^toggle") or cmdLower:find("^unloop") or cmdLower:find("^unno")
-
-			if isToggleCmd and offCmd then
-				-- Toggle button with on/off states
-				local currentState = isToggleOn(cmdName)
-				tab:Toggle({
-					Title = cmdName .. aliases,
-					Desc = desc,
-					Value = currentState,
-					Callback = function(state)
-						if state then
-							execCommand(cmdName)
-						else
-							execCommand(offCmd)
-						end
-					end,
-				})
-			elseif isToggleCmd and not offCmd then
-				-- Self-toggling command
-				local currentState = isToggleOn(cmdName)
-				tab:Toggle({
-					Title = cmdName .. aliases,
-					Desc = desc,
-					Value = currentState,
-					Callback = function(state)
-						execCommand(cmdName)
-					end,
-				})
-			elseif cmdLower:find("speed") or cmdLower:find("velocity") or cmdLower:find("gravity") or cmdLower:find("jump") or cmdLower:find("fov") or cmdLower:find("flyspeed") or cmdLower:find("vflyspeed") or cmdLower:find("cflyspeed") or cmdLower:find("tweenspeed") or cmdLower:find("fcspeed") or cmdLower:find("spamspeed") or cmdLower:find("ms") or cmdLower:find("reach") or cmdLower:find("gotopartdelay") or cmdLower:find("ambient") or cmdLower:find("brightness") or cmdLower:find("maxzoom") or cmdLower:find("minzoom") or cmdLower:find("camdistance") or cmdLower:find("esptransparency") or cmdLower:find("hipheight") or cmdLower:find("maxslopeangle") or cmdLower:find("destroyheight") or cmdLower:find("mousesensitivity") then
-				-- Commands with numeric argument -> Button + advance slider
-				tab:Button({
-					Title = cmdName .. aliases,
-					Desc = desc .. " (click to open settings)",
-					Callback = function()
-						-- Open a popup with input/slider
-						WindUI:Popup({
-							Title = cmdName,
-							Content = "Enter value for " .. cmdName,
-							Buttons = {
-								{
-									Title = "Execute",
-									Variant = "Primary",
-									Callback = function()
-										-- We need input; use a simple approach
-										execCommand(cmdName .. " " .. tostring(_G.IY_TEMP_VALUE or ""))
-									end,
-								},
-								{ Title = "Cancel", Variant = "Tertiary" },
-							},
-						})
-					end,
-				})
-			elseif cmdLower:find("player") or cmdLower:find("goto") or cmdLower:find("view") or cmdLower:find("spectate") or cmdLower:find("locate") or cmdLower:find("esp") or cmdLower:find("bring") or cmdLower:find("freeze") or cmdLower:find("thaw") or cmdLower:find("whisper") or cmdLower:find("pm") or cmdLower:find("inspect") or cmdLower:find("age") or cmdLower:find("userid") or cmdLower:find("friend") or cmdLower:find("unfriend") or cmdLower:find("follow") or cmdLower:find("orbit") or cmdLower:find("stare") or cmdLower:find("headsize") or cmdLower:find("hitbox") or cmdLower:find("mutevc") or cmdLower:find("unmutevc") or cmdLower:find("listento") or cmdLower:find("loopbring") or cmdLower:find("pulsetp") or cmdLower:find("tweengoto") or cmdLower:find("vehiclegoto") or cmdLower:find("clientbring") then
-				-- Commands with player argument -> Button + advance selection
-				tab:Button({
-					Title = cmdName .. aliases,
-					Desc = desc .. " (select player)",
-					Callback = function()
-						local plrs = Players:GetPlayers()
-						local values = {}
-						for _, plr in ipairs(plrs) do
-							table.insert(values, { Title = plr.Name, Icon = "user" })
-						end
-						table.insert(values, 1, { Title = "Me (Self)", Icon = "user-check" })
-						table.insert(values, { Title = "All", Icon = "users" })
-
-						WindUI:Popup({
-							Title = cmdName .. " - Select Player",
-							Content = "Choose a player target:",
-							Buttons = {},
-						})
-						-- Use a dropdown instead - WindUI popup doesn't support dropdown directly
-						-- Fall back to executing with "me"
-						execCommand(cmdName .. " me")
-					end,
-				})
-			else
-				-- Plain command -> Button
-				tab:Button({
-					Title = cmdName .. aliases,
-					Desc = desc,
-					Callback = function()
-						execCommand(cmdName)
-					end,
-				})
-			end
-		end
-	end
-end
-
--- ---------------------------------------------------------------------------
--- 7. Settings tab
--- ---------------------------------------------------------------------------
-local function buildSettingsTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local settingsTab = settingsSection:Tab({ Title = "Settings", Icon = "sliders" })
-
-	-- Prefix input
-	settingsTab:Input({
-		Title = "Command Prefix",
-		Value = prefix,
-		Callback = function(value)
-			prefix = value or "/"
-			if PrefixBox then PrefixBox.Text = prefix end
-			if Cmdbar then Cmdbar.PlaceholderText = "Command Bar (" .. prefix .. ")" end
-			updatesaves()
-		end,
-	})
-
-	-- KeepIY toggle
-	settingsTab:Toggle({
-		Title = "Keep Infinite Yield on Teleport",
-		Value = KeepInfYield or false,
-		Callback = function(state)
-			KeepInfYield = state
-			updatesaves()
-		end,
-	})
-
-	-- Logs toggle
-	settingsTab:Toggle({
-		Title = "Chat Logs",
-		Value = logsEnabled or false,
-		Callback = function(state)
-			logsEnabled = state
-			if Toggle then Toggle.Text = state and "Enabled" or "Disabled" end
-			updatesaves()
-		end,
-	})
-
-	-- Join Logs toggle
-	settingsTab:Toggle({
-		Title = "Join Logs",
-		Value = jLogsEnabled or false,
-		Callback = function(state)
-			jLogsEnabled = state
-			if Toggle_2 then Toggle_2.Text = state and "Enabled" or "Disabled" end
-			updatesaves()
-		end,
-	})
-
-	-- GUI Scale
-	settingsTab:Slider({
-		Title = "GUI Scale",
-		Value = { Min = 0.4, Max = 2, Default = guiScale or 1 },
-		Callback = function(value)
-			guiScale = value
-			if Scale then Scale.Scale = math.max(Holder.AbsoluteSize.X / 1920, guiScale) end
-			updatesaves()
-		end,
-	})
-
-	-- Theme selector
-	settingsTab:Dropdown({
-		Title = "Theme",
-		Values = {},
-		Value = WindUI:GetCurrentTheme(),
-		Callback = function(themeName)
-			WindUI:SetTheme(themeName)
-		end,
-	})
-
-	-- Populate themes
-	local themes = WindUI:GetThemes()
-	local themeList = {}
-	for name, _ in pairs(themes) do
-		table.insert(themeList, name)
-	end
-	table.sort(themeList)
-	-- Re-create dropdown with values (WindUI may not support dynamic refresh easily)
-	-- We'll set it via a refresh if available
-end
-
--- ---------------------------------------------------------------------------
--- 8. Plugins tab
--- ---------------------------------------------------------------------------
-local function buildPluginsTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local pluginsTab = settingsSection:Tab({ Title = "Plugins", Icon = "plug" })
-
-	pluginsTab:Input({
-		Title = "Plugin File Name",
-		Placeholder = "e.g. myplugin.iy",
-		Callback = function(value)
-			if value and value ~= "" then
-				addPlugin(value)
-			end
-		end,
-	})
-
-	pluginsTab:Button({
-		Title = "Add All Plugins from Workspace",
-		Callback = function()
-			if addallplugins then
-				addallplugins()
-			else
-				notify("Plugins", "addallplugins not available")
-			end
-		end,
-	})
-
-	-- List loaded plugins
-	if PluginsTable and #PluginsTable > 0 then
-		pluginsTab:Paragraph({
-			Title = "Loaded Plugins",
-			Desc = table.concat(PluginsTable, "\n"),
-		})
-	end
-end
-
--- ---------------------------------------------------------------------------
--- 9. Waypoints tab
--- ---------------------------------------------------------------------------
-local function buildWaypointsTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local wpTab = settingsSection:Tab({ Title = "Waypoints", Icon = "map-pin" })
-
-	wpTab:Input({
-		Title = "Waypoint Name",
-		Placeholder = "Enter waypoint name",
-		Callback = function(value)
-			_G.IY_WP_NAME = value
-		end,
-	})
-
-	wpTab:Button({
-		Title = "Set Waypoint at Position",
-		Callback = function()
-			local name = _G.IY_WP_NAME or "Waypoint"
-			execCmd("setwaypoint " .. name)
-		end,
-	})
-
-	wpTab:Button({
-		Title = "Refresh Waypoints",
-		Callback = function()
-			refreshwaypoints()
-		end,
-	})
-
-	if #WayPoints > 0 then
-		wpTab:Paragraph({
-			Title = "Waypoints",
-			Desc = table.concat(WayPoints, ", "),
-		})
-	end
-end
-
--- ---------------------------------------------------------------------------
--- 10. Aliases tab
--- ---------------------------------------------------------------------------
-local function buildAliasesTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local aliasTab = settingsSection:Tab({ Title = "Aliases", Icon = "share-2" })
-
-	aliasTab:Input({
-		Title = "Command",
-		Placeholder = "Command name",
-		Callback = function(value)
-			_G.IY_ALIAS_CMD = value
-		end,
-	})
-
-	aliasTab:Input({
-		Title = "Alias",
-		Placeholder = "Alias name",
-		Callback = function(value)
-			_G.IY_ALIAS_NAME = value
-		end,
-	})
-
-	aliasTab:Button({
-		Title = "Add Alias",
-		Callback = function()
-			local cmd = _G.IY_ALIAS_CMD or ""
-			local alias = _G.IY_ALIAS_NAME or ""
-			if cmd ~= "" and alias ~= "" then
-				execCmd("addalias " .. cmd .. " " .. alias)
-			end
-		end,
-	})
-
-	aliasTab:Button({
-		Title = "Clear All Aliases",
-		Callback = function()
-			execCmd("clraliases")
-		end,
-	})
-end
-
--- ---------------------------------------------------------------------------
--- 11. Keybinds tab
--- ---------------------------------------------------------------------------
-local function buildKeybindsTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local kbTab = settingsSection:Tab({ Title = "Keybinds", Icon = "key" })
-
-	kbTab:Button({
-		Title = "Open Keybind Editor (IY)",
-		Desc = "Uses IY's built-in keybind editor",
-		Callback = function()
-			if KeybindsFrame then
-				KeybindsFrame.Visible = true
-				SettingsHolder.Visible = false
-			end
-		end,
-	})
-
-	kbTab:Button({
-		Title = "Clear All Keybinds",
-		Callback = function()
-			binds = {}
-			refreshbinds()
-			updatesaves()
-			notify("Keybinds", "All keybinds removed")
-		end,
-	})
-end
-
--- ---------------------------------------------------------------------------
--- 12. Themes tab
--- ---------------------------------------------------------------------------
-local function buildThemesTab()
-	local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-	local themeTab = settingsSection:Tab({ Title = "Themes", Icon = "palette" })
-
-	local themes = WindUI:GetThemes()
-	for themeName, _ in pairs(themes) do
-		themeTab:Button({
-			Title = themeName,
-			Callback = function()
-				WindUI:SetTheme(themeName)
-			end,
-		})
-	end
-
-	themeTab:Button({
-		Title = "Refresh Theme List",
-		Callback = function()
-			notify("Themes", "Theme list refreshed")
-		end,
-	})
-end
-
--- ---------------------------------------------------------------------------
--- 13. Player Selection Dropdown helper
--- ---------------------------------------------------------------------------
-local function createPlayerSelector(callback)
-	local plrs = Players:GetPlayers()
-	local values = {}
-	table.insert(values, { Title = "Me (Self)", Icon = "user-check" })
-	for _, plr in ipairs(plrs) do
-		if plr ~= Players.LocalPlayer then
-			table.insert(values, { Title = plr.Name, Icon = "user" })
-		end
-	end
-	table.insert(values, { Title = "All", Icon = "users" })
-	table.insert(values, { Title = "Others", Icon = "users" })
-
-	-- WindUI doesn't have a standalone dropdown outside tabs, so we use a popup
-	-- The callback receives the selected player name(s)
-	return values
-end
-
--- ---------------------------------------------------------------------------
--- 14. Initialize UI
--- ---------------------------------------------------------------------------
-local function init()
-	buildCommandTabs()
-	buildSettingsTab()
-	buildPluginsTab()
-	buildWaypointsTab()
-	buildAliasesTab()
-	buildKeybindsTab()
-	buildThemesTab()
-
-	-- Notify that IY is loaded with WindUI
-	WindUI:Notify({
-		Title = "Infinite Yield v" .. tostring(currentVersion or "6.4.2"),
-		Content = "UI powered by WindUI. Default prefix: /",
-		Duration = 5,
-		Icon = "zap",
-	})
-end
-
--- Run init after WindUI is ready
-task.spawn(init)
-
--- ---------------------------------------------------------------------------
--- 15. Auto-refresh command list when plugins load
--- ---------------------------------------------------------------------------
--- IY's plugin loader calls addcmd which adds to cmds table.
--- We refresh the UI periodically to pick up new plugin commands.
-task.spawn(function()
-	while true do
-		task.wait(5)
-		-- Check if new commands were added (simple heuristic: count changed)
-		-- Note: Full UI rebuild is expensive; this is a placeholder
-		-- In production, you'd want to hook addcmd to refresh specific tabs
-	end
-end)
-
---[[ </our_code> ]]
-</our_code>
-
-</IY>
-<our_code>
---[[ <our_code> ]]
--- ============================================================================
--- WindUI Integration Wrapper for Infinite Yield
--- Default prefix: /
--- All IY UI removed; WindUI provides the interface.
--- IY <IY></IY> block is left verbatim for easy replacement.
--- ============================================================================
-
-task.wait(0.15)
-
--- ---------------------------------------------------------------------------
--- 0. Helpers
--- ---------------------------------------------------------------------------
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
-
-local function isFunction(f) return type(f) == "function" end
-local function safeCall(f, ...) local ok, err = pcall(f, ...) if not ok then warn("[IY-WindUI]", err) end end
-
--- ---------------------------------------------------------------------------
--- 1. Hide IY's original UI elements (keep Cmdbar + CMDsF alive for /cmdbar
---    and chat execution). All other IY-drawn GUIs are hidden.
--- ---------------------------------------------------------------------------
-local function hideIYElement(obj)
-	if obj and obj:IsA("GuiObject") then
-		obj.Visible = false
-	end
-end
-
-local iyGuiElements = {
-	Holder, Settings, KeybindsFrame, PluginEditor,
-	Notification, Tooltip, KeybindEditor, ToPartFrame,
-	SettingsHolder, PositionsFrame, AliasesFrame, PluginsFrame,
-}
-for _, obj in ipairs(iyGuiElements) do hideIYElement(obj) end
-
--- Color picker popup if open
-if picker and picker:IsA("GuiObject") then picker.Visible = false end
-
--- eventEditor frame
-if eventEditor and eventEditor.Frame then eventEditor.Frame.Visible = false end
-
--- reference frame (built as table inside IY)
-if reference and type(reference) == "table" and reference.main then
-	reference.main.Visible = false
-end
-
--- IY intro cleanup
-for _, name in ipairs({"Logo", "Credits", "IntroBackground"}) do
-	local elem = Holder:FindFirstChild(name)
-	if elem then elem.Visible = false end
-end
-
--- ---------------------------------------------------------------------------
--- 2. Default prefix -> /
--- ---------------------------------------------------------------------------
-prefix = "/"
-if PrefixBox then PrefixBox.Text = "/" end
-if Cmdbar then Cmdbar.PlaceholderText = "Command Bar (/)" end
-
--- ---------------------------------------------------------------------------
--- 3. Load WindUI
--- ---------------------------------------------------------------------------
-local WindUI = nil
-local loadErrors = {}
-
-local function tryRequire(path)
-	local ok, result = pcall(function() return require(path) end)
-	if ok then return result end
-	table.insert(loadErrors, path .. ": " .. tostring(result))
-	return nil
-end
-
-local candidatePaths = {
-	"./WindUI/src/Init",
-	"../WindUI/src/Init",
-	"./src/Init",
-	"WindUI",
-	"src/Init",
-}
-
 for _, path in ipairs(candidatePaths) do
 	WindUI = tryRequire(path)
 	if WindUI then break end
 end
 
+-- Fallback: download from GitHub raw
 if not WindUI then
-	warn("[IY-WindUI] WindUI could not be loaded. Tried:\n" .. table.concat(loadErrors, "\n"))
-	warn("[IY-WindUI] Add WindUI as a ModuleScript and adjust the require path in wrapper_code.lua")
+	local ok, result = pcall(function()
+		local code = game:HttpGet("https://raw.githubusercontent.com/MRXXXGMRYT/Absolute-Yield/main/WindUI/src/Init.lua")
+		if code and code ~= "" then
+			local fn = loadstring(code)
+			if type(fn) == "function" then
+				return fn()
+			end
+		end
+		return nil
+	end)
+	if ok and result then
+		WindUI = result
+	end
+end
+
+if not WindUI then
+	warn("[IY-WindUI] WindUI could not be loaded. Place WindUI folder in ReplicatedStorage.")
+	warn("[IY-WindUI] Tried paths:\n" .. table.concat(loadErrors, "\n"))
 	return
 end
 
+print("[IY-WindUI] WindUI loaded successfully")
+
 -- ---------------------------------------------------------------------------
--- 4. Create WindUI Window
+-- 3. Create WindUI Window
 -- ---------------------------------------------------------------------------
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local Workspace = workspace
+local PlaceId, JobId = game.PlaceId, game.JobId
+
 local Window = WindUI:CreateWindow({
 	Title = "Infinite Yield v" .. tostring(currentVersion or "6.4.2"),
 	Theme = "Dark",
@@ -14328,139 +13533,68 @@ local Window = WindUI:CreateWindow({
 		Enabled = true,
 		Anonymous = true,
 		Callback = function()
-			WindUI:Notify({ Title = "Infinite Yield", Content = "User profile", Duration = 2 })
+			WindUI:Notify({
+				Title = "Infinite Yield",
+				Content = "User profile",
+				Duration = 2
+			})
 		end,
 	},
 })
 
--- ---------------------------------------------------------------------------
--- 5. Override IY UI functions to use WindUI
--- ---------------------------------------------------------------------------
+Window:SetIconSize(48)
+Window:Tag({
+	Title = "v" .. tostring(currentVersion or "6.4.2"),
+	Color = Color3.fromHex("#30ff6a")
+})
 
--- notify() -> WindUI Notify
-local origNotify = notify
-function notify(text, text2, length)
-	if text2 then
-		WindUI:Notify({ Title = tostring(text), Content = tostring(text2), Duration = length or 5 })
-	else
-		WindUI:Notify({ Title = "Infinite Yield", Content = tostring(text), Duration = length or 5 })
+-- ---------------------------------------------------------------------------
+-- 4. Helper functions
+-- ---------------------------------------------------------------------------
+local function execCommand(cmdStr)
+	execCmd(cmdStr, LocalPlayer, true)
+end
+
+local function notify(title, text, duration)
+	if WindUI then
+		WindUI:Notify({
+			Title = tostring(title or "Notification"),
+			Content = tostring(text or ""),
+			Duration = duration or 5
+		})
 	end
 end
 
--- createPopup() -> WindUI Dialog
-local origCreatePopup = createPopup
-function createPopup(title, text)
-	WindUI:Dialog({
-		Title = tostring(title),
-		Content = tostring(text),
-		Buttons = {
-			{ Title = "OK", Variant = "Primary" }
-		}
-	})
+local function getCmdDesc(cmdEntry)
+	if cmdEntry.DESC and cmdEntry.DESC ~= "" then
+		return cmdEntry.DESC
+	end
+	local name = cmdEntry.NAME:match("([^ ]+)") or cmdEntry.NAME
+	return "Run the " .. name .. " command"
 end
 
 -- ---------------------------------------------------------------------------
--- 6. Command metadata & categorisation
+-- 5. Build command UI from IY's cmds table
 -- ---------------------------------------------------------------------------
 local togglePairs = {
 	fly = "unfly",
-	noclip = "unnoclip",
-	clip = "noclip",
-	unnoclip = "noclip",
+	noclip = "clip",
 	esp = "noesp",
-	espteam = "noesp",
-	noesp = "esp",
-	chams = "nochams",
-	nochams = "chams",
 	xray = "unxray",
-	unxray = "xray",
-	loopxray = "unloopxray",
-	unloopxray = "loopxray",
-	togglexray = nil,
 	fullbright = "unloopfullbright",
-	loopfullbright = "unloopfullbright",
-	unloopfullbright = "loopfullbright",
 	fling = "unfling",
-	unfling = "fling",
-	togglefling = nil,
-	walkfling = "unwalkfling",
-	unwalkfling = "walkfling",
-	togglewalkfling = nil,
-	antifling = "unantifling",
-	unantifling = "antifling",
-	toggleantifling = nil,
 	swim = "unswim",
-	unswim = "swim",
-	toggleswim = nil,
 	float = "unfloat",
-	unfloat = "float",
-	togglefloat = nil,
 	invisible = "visible",
-	visible = "invisible",
-	toggleinvis = nil,
-	spin = "unspin",
-	unspin = "spin",
-	loopanimation = "stopanimations",
-	stopanimations = "loopanimation",
-	noanim = "reanim",
-	reanim = "noanim",
-	infjump = "uninfjump",
-	uninfjump = "infjump",
-	flyjump = "unflyjump",
-	unflyjump = "flyjump",
-	autojump = "unautojump",
-	unautojump = "autojump",
-	edgejump = "unedgejump",
-	unedgejump = "edgejump",
-	platformstand = "unplatformstand",
-	unplatformstand = "platformstand",
-	norotate = "unnorotate",
-	unnorotate = "norotate",
-	nobgui = "unloopnobgui",
-	loopnobgui = "unloopnobgui",
-	unloopnobgui = "nobgui",
-	bubblechat = "unbubblechat",
-	unbubblechat = "bubblechat",
-	chatwindow = "unchatwindow",
-	unchatwindow = "chatwindow",
-	autoclick = "unautoclick",
-	unautoclick = "autoclick",
-	autokeypress = "unautokeypress",
-	unautokeypress = "autokeypress",
-	hovername = "unhovername",
-	unhovername = "hovername",
-	walltp = "unwalltp",
-	unwalltp = "walltp",
-	freecam = "unfreecam",
-	unfreecam = "freecam",
-	antivoid = "unantivoid",
-	unantivoid = "antivoid",
-	togglefly = nil,
-	togglevfly = nil,
-	toggleswim = nil,
-	togglefloat = nil,
-	toggleinvis = nil,
-	toggleantifling = nil,
-	togglefling = nil,
-	togglewalkfling = nil,
-	clicktp = nil,
-	clickdelete = nil,
 }
 
 local commandDescs = {
 	fly = "Makes you fly",
 	unfly = "Disables fly",
-	flyspeed = "Set fly speed",
-	vfly = "Vehicle fly",
-	unvfly = "Disable vehicle fly",
 	noclip = "Go through objects",
 	clip = "Disable noclip",
 	esp = "View all players and their status",
 	noesp = "Removes ESP",
-	xray = "Makes all parts transparent",
-	unxray = "Restore transparency",
-	fullbright = "Makes map brighter",
-	unloopfullbright = "Stop looped fullbright",
 	speed = "Change walkspeed",
 	jumppower = "Change jump height",
 	gravity = "Change gravity",
@@ -14475,78 +13609,23 @@ local commandDescs = {
 	rejoin = "Rejoin the server",
 	serverhop = "Hop to another server",
 	chat = "Chat a message",
-	spam = "Spam chat",
 	notify = "Send a notification",
-	freecam = "Free camera",
+	discord = "Get Discord invite",
 	prefix = "Change command prefix",
-	guiscale = "Change GUI scale",
-	keepiy = "Auto execute on teleport",
-	logs = "Open chat logs",
-	chatlogs = "Log chat messages",
-	joinlogs = "Log player joins",
-	debug = "Toggle debug mode",
 }
-
-local function getCmdDesc(cmdEntry)
-	if cmdEntry.DESC and cmdEntry.DESC ~= "" then
-		return cmdEntry.DESC
-	end
-	local name = cmdEntry.NAME:match("([^ ]+)") or cmdEntry.NAME
-	return commandDescs[name:lower()] or "Run the " .. name .. " command"
-end
-
-local function isToggleOn(cmdName)
-	local stateVars = {
-		["fly"] = FLYING,
-		["noclip"] = (Clip == false),
-		["esp"] = ESPenabled,
-		["chams"] = CHMSenabled,
-		["xray"] = xrayEnabled,
-		["fling"] = flinging,
-		["swim"] = swimming,
-		["float"] = floating,
-		["invisible"] = invisRunning,
-		["antifling"] = antifling ~= nil,
-		["freecam"] = fcRunning,
-		["walltp"] = walltpTouch ~= nil,
-		["hovername"] = nbUpdateFunc ~= nil,
-		["autoclick"] = autoclicking,
-		["autokeypress"] = autoKeyPressing,
-		["bubblechat"] = nil,
-		["chatwindow"] = nil,
-	}
-	return stateVars[cmdName:lower()]
-end
-
-local function execCommand(cmdStr)
-	if isFunction(execCmd) then
-		execCmd(cmdStr, LocalPlayer, true)
-	end
-end
-
--- ---------------------------------------------------------------------------
--- 7. Build command UI from IY's cmds table
--- ---------------------------------------------------------------------------
-local commandEntries = {} -- cmdName -> {tab, element, cmdEntry}
 
 local function categoriseCommand(cmdName)
 	local name = cmdName:lower()
 	local keywordMap = {
-		Movement = {"fly", "speed", "walk", "jump", "swim", "float", "noclip", "clip", "spin", "sit", "lay", "platform", "gravity", "hipheight", "flyspeed", "vfly", "fling", "walkfling", "orbit", "stun", "norotate", "breakvelocity", "anchor", "unanchor", "freeze", "thaw", "reach", "grippos", "infjump", "flyjump", "autojump", "edgejump", "nosit", "togglenoclip", "togglefly", "toggleswim", "togglefloat", "toggleinvis", "toggleantifling", "togglefling", "togglewalkfling", "unfly", "unnoclip", "noesp", "unxray", "unswim", "unfloat", "visible", "unspin", "stopanimations", "reanim", "uninfjump", "unflyjump", "unautojump", "unedgejump", "unplatformstand", "unnorotate"},
-		Teleport = {"goto", "tppos", "tweentppos", "offset", "thru", "tptool", "tpwalk", "waypoint", "waypoints", "setwaypoint", "showwaypoints", "hidewaypoints", "deletewaypoint", "clearwaypoints", "gotocamera", "freecam", "freecamgoto", "freecampos", "bringpart", "tpunanchored", "flashback", "walltp", "mouseteleport", "clickteleport", "tweengotocamera", "pulsetp", "loopgoto", "clientbring", "loopbring", "vehiclegoto", "tweengoto", "tweenwaypoint", "walktowaypoint"},
-		Player = {"esp", "locate", "view", "spectate", "inspect", "age", "userid", "appearanceid", "ping", "notifyposition", "copyposition", "headsize", "hitbox", "friend", "unfriend", "headsit", "walkto", "follow", "stareat", "chams", "partesp", "nolocate", "unview", "listento", "mutevc", "unmutevc", "muteallvoices", "unmuteallvoices", "npcs"},
-		Visuals = {"xray", "unxray", "fullbright", "ambient", "day", "night", "nofog", "brightness", "globalshadows", "restorelighting", "light", "nolight", "invisibleparts", "uninvisibleparts", "invisible", "visible", "toolinvisible", "naked", "noface", "blockhead", "blockhats", "drophats", "deletehats", "chams", "nochams", "esp", "noesp", "espteam", "loopxray", "unloopxray", "togglexray", "esptransparency"},
-		Fun = {"bang", "jerk", "scare", "spook", "carpet", "spasm", "headthrow", "dance", "undance", "animation", "emote", "creeper", "split", "nilchar", "unnilchar", "noroot", "replaceroot", "unspasm", "nospasm", "loopanimation"},
-		Chat = {"chat", "say", "spam", "unspam", "whisper", "pm", "pmspam", "nopmspam", "spamspeed", "chatage", "chatjoindate", "bubblechat", "unbubblechat", "chatwindow", "unchatwindow", "darkchat", "notify", "lastcommand", "chatlogs", "joinlogs", "chatlogswebhook"},
-		Server = {"rejoin", "serverhop", "serverinfo", "jobid", "notifyjobid", "autorejoin", "inviteprompt", "exit", "antiafk", "datalimit", "replicationlag", "antilag", "setfpscap", "volume", "cancelteleport", "clientantikick", "clientantiteleport", "allowrejoin", "savegame", "clearerror", "antigameplaypaused", "unantigameplaypaused", "removeads", "adblock"},
-		Client = {"btools", "f3x", "explorer", "dex", "moondex", "remotespy", "simplespy", "audiologger", "console", "oldconsole", "delete", "deleteclass", "guidelete", "unguidelete", "showguis", "hideguis", "unhideguis", "togglefullscreen", "record", "screenshot", "noclipcam", "maxzoom", "minzoom", "camdistance", "fov", "fixcam", "enableshiftlock", "firstp", "thirdp", "lookat", "ctrllock", "unctrllock", "alignmentkeys", "mousesensitivity", "hovername", "nobgui", "team", "promptr6", "promptr15", "wallwalk"},
-		Character = {"reset", "respawn", "refresh", "god", "invisible", "visible", "toolinvisible", "speed", "jumppower", "jump", "infjump", "flyjump", "sit", "lay", "sitwalk", "nosit", "platformstand", "norotate", "gravity", "hipheight", "anchor", "unanchor", "freeze", "thaw", "clearcharappearance", "tools", "notools", "droptools", "equiptools", "unequiptools", "copytools", "dupetools", "reach", "boxreach", "grippos", "usetools", "spawnpoint", "nospawnpoint", "strengthen", "weaken", "unweaken", "breakvelocity"},
-		Animation = {"animation", "anim", "emote", "dance", "undance", "spasm", "unspasm", "noanim", "reanim", "animspeed", "loopanimation", "stopanimations", "refreshanimations", "copyanimation", "copyanimationid", "allowcustomanim", "unallowcustomanim", "freezeanims", "unfreezeanims"},
-		Tools = {"tools", "notools", "droptools", "equiptools", "unequiptools", "copytools", "dupetools", "deleteselectedtool", "grabtools", "ungrabtools", "reach", "boxreach", "grippos", "usetools", "removespecifictool", "unremovespecifictool", "clearremovespecifictool"},
-		Waypoints = {"setwaypoint", "waypointpos", "waypoints", "showwaypoints", "hidewaypoints", "waypoint", "tweenwaypoint", "walktowaypoint", "deletewaypoint", "clearwaypoints", "cleargamewaypoints"},
-		Keybinds = {},
-		Plugins = {"addplugin", "removeplugin", "reloadplugin", "addallplugins"},
-		Settings = {"prefix", "guiscale", "hideiy", "showiy", "keepiy", "unkeepiy", "togglekeepiy", "logs", "chatlogs", "joinlogs", "debug"},
+		Movement = {"fly", "speed", "walk", "jump", "swim", "float", "noclip", "clip", "spin", "sit", "gravity", "flyspeed", "fling", "orbit", "stun", "breakvelocity", "anchor", "infjump", "flyjump", "autojump", "edgejump"},
+		Teleport = {"goto", "tppos", "waypoint", "setwaypoint", "waypoints", "rejoin", "freecam", "gotocamera", "tpwalk", "mouseteleport"},
+		Player = {"esp", "locate", "view", "spectate", "inspect", "age", "userid", "ping", "friend", "unfriend", "follow", "stareat", "chams"},
+		Visuals = {"xray", "fullbright", "esp", "noesp", "invisible", "visible", "ambient", "day", "night", "nofog", "brightness"},
+		Fun = {"bang", "jerk", "scare", "spook", "dance", "animation", "emote", "spasm"},
+		Chat = {"chat", "say", "spam", "notify", "discord"},
+		Server = {"rejoin", "serverhop", "serverinfo", "jobid", "notifyjobid", "exit"},
+		Character = {"reset", "respawn", "god", "invisible", "visible", "speed", "jumppower", "sit", "lay", "platformstand"},
+		Settings = {"prefix", "guiscale", "keepiy", "logs", "debug"},
 	}
 
 	for cat, kws in pairs(keywordMap) do
@@ -14559,46 +13638,29 @@ local function categoriseCommand(cmdName)
 	return "Movement"
 end
 
-local function addCommandToUI(cmdEntry)
-	-- Commands that have dedicated WindUI tabs ‚Äî excluded from auto-generated command list
-local excludedTabCmds = {
-	["sd"] = true,
-	["serverdirectory"] = true,
-	["findplaces"] = true,
-	["findsecretplaces"] = true,
-	["iystore remake"] = true,
-	["iys"] = true,
-	["storeiy"] = true,
-	["iystore"] = true,
-}
+local commandTabs = {}
 
-local cmdName = cmdEntry.NAME
+local function addCommandToUI(cmdEntry)
+	local cmdName = cmdEntry.NAME
 	local cmdLower = cmdName:lower()
-	if excludedTabCmds[cmdLower] then
-		return
-	end
 	local desc = getCmdDesc(cmdEntry)
-	local aliases = #cmdEntry.ALIAS > 0 and (" (aliases: " .. table.concat(cmdEntry.ALIAS, ", ") .. ")") or ""
 
 	local cat = categoriseCommand(cmdName)
 
-	-- Get or create tab for category
-	if not commandEntries[cat] then
-		commandEntries[cat] = Window:Section({ Title = cat, Opened = true }):Tab({ Title = cat, Icon = "layout-grid" })
+	if not commandTabs[cat] then
+		local section = Window:Section({ Title = cat, Opened = true })
+		commandTabs[cat] = section:Tab({ Title = cat, Icon = "layout-grid" })
 	end
-	local tab = commandEntries[cat]
+	local tab = commandTabs[cat]
 
 	local offCmd = togglePairs[cmdLower]
-	local isToggleCmd = offCmd ~= nil or cmdLower:find("^un") or cmdLower:find("^no") or cmdLower:find("^toggle") or cmdLower:find("^unloop") or cmdLower:find("^unno")
-
-	local numericArgCmds = {"speed", "jumppower", "gravity", "fov", "flyspeed", "vflyspeed", "cflyspeed", "tweenspeed", "fcspeed", "spamspeed", "ms", "reach", "gotopartdelay", "ambient", "brightness", "maxzoom", "minzoom", "camdistance", "esptransparency", "hipheight", "maxslopeangle", "destroyheight", "mousesensitivity", "volume", "datalimit", "replicationlag", "setfpscap", "tweenwaypoint", "gotopartdelay"}
-	local playerArgCmds = {"goto", "view", "spectate", "locate", "esp", "bring", "freeze", "thaw", "whisper", "pm", "inspect", "age", "userid", "friend", "unfriend", "follow", "orbit", "stare", "headsize", "hitbox", "mutevc", "unmutevc", "listento", "loopbring", "pulsetp", "tweengoto", "vehiclegoto", "clientbring", "chatage", "chatjoindate", "copyname", "copyuserid", "copyappearanceid", "appearanceid", "notifyposition", "copyposition", "ban", "unban"}
+	local isToggleCmd = offCmd ~= nil or cmdLower:find("^un") or cmdLower:find("^no") or cmdLower:find("^toggle")
 
 	if isToggleCmd and offCmd then
 		tab:Toggle({
-			Title = cmdName .. aliases,
+			Title = cmdName,
 			Desc = desc,
-			Value = isToggleOn(cmdName) or false,
+			Value = false,
 			Callback = function(state)
 				if state then
 					execCommand(cmdName)
@@ -14607,437 +13669,33 @@ local cmdName = cmdEntry.NAME
 				end
 			end,
 		})
-	elseif isToggleCmd and not offCmd then
-		tab:Toggle({
-			Title = cmdName .. aliases,
-			Desc = desc,
-			Value = isToggleOn(cmdName) or false,
-			Callback = function(state)
-				execCommand(cmdName)
-			end,
-		})
-	elseif table.find(numericArgCmds, cmdLower) then
-		tab:Button({
-			Title = cmdName .. aliases,
-			Desc = desc .. " (enter value)",
-			Callback = function()
-				WindUI:Dialog({
-					Title = cmdName,
-					Content = "Enter value for " .. cmdName .. ":",
-					Buttons = {
-						{
-							Title = "Execute",
-							Variant = "Primary",
-							Callback = function()
-								-- WindUI Dialog doesn't expose input directly; use a workaround via exec with prompt
-								-- We'll store a pending value approach: simplest is to just execute with no arg
-								-- and let user use chat bar for arguments, or open a small input via IY Cmdbar.
-								execCommand(cmdName)
-							end,
-						},
-						{ Title = "Cancel", Variant = "Tertiary" },
-					},
-				})
-			end,
-		})
-	elseif table.find(playerArgCmds, cmdLower) then
-		tab:Button({
-			Title = cmdName .. aliases,
-			Desc = desc .. " (select player)",
-			Callback = function()
-				-- Default to "me" via chat execution path; user can use chat bar for specific player
-				execCommand(cmdName .. " me")
-			end,
-		})
 	else
 		tab:Button({
-			Title = cmdName .. aliases,
+			Title = cmdName,
 			Desc = desc,
 			Callback = function()
 				execCommand(cmdName)
 			end,
 		})
 	end
-
-	commandEntries[cmdName] = { tab = tab, cmdEntry = cmdEntry }
 end
 
--- Build initial UI from all existing commands (including plugins already loaded)
-local function buildAllCommands()
-	commandEntries = {}
-	-- Clear previous tabs
-	for cat, _ in pairs(commandEntries) do commandEntries[cat] = nil end
-
-	for _, cmd in pairs(cmds) do
-		addCommandToUI(cmd)
-	end
-	-- Also add custom aliases
-	for aliasName, cmdEntry in pairs(customAlias) do
-		if not excludedTabCmds[aliasName:lower()] then
-			addCommandToUI({
-				NAME = aliasName,
-				ALIAS = {},
-				FUNC = cmdEntry.FUNC,
-				PLUGIN = cmdEntry.PLUGIN,
-				DESC = "Alias for " .. cmdEntry.NAME,
-			})
-		end
-	end
-end
-
-buildAllCommands()
-
--- ---------------------------------------------------------------------------
--- 8. Hook addcmd / removecmd / overridecmd for dynamic plugin refresh
--- ---------------------------------------------------------------------------
-local origAddCmd = addcmd
-function addcmd(name, alias, func, plgn)
-	safeCall(origAddCmd, name, alias, func, plgn)
-	-- Skip commands that have dedicated WindUI tabs
-	if not excludedTabCmds[name:lower()] then
-		-- Refresh UI to include new command
-		local newEntry = { NAME = name, ALIAS = alias or {}, FUNC = func, PLUGIN = plgn, DESC = "" }
-		addCommandToUI(newEntry)
-		notify("Command Added", name, 3)
-	end
-end
-
-local origRemoveCmd = removecmd
-function removecmd(cmd)
-	safeCall(origRemoveCmd, cmd)
-	-- UI rebuild not trivial; notify user
-	notify("Command Removed", cmd, 3)
-end
-
-local origOverrideCmd = overridecmd
-function overridecmd(name, func)
-	safeCall(origOverrideCmd, name, func)
+-- Build initial command list
+for _, cmd in pairs(cmds) do
+	addCommandToUI(cmd)
 end
 
 -- ---------------------------------------------------------------------------
--- 9. Hook addPlugin / deletePlugin to refresh command list
--- ---------------------------------------------------------------------------
-local origAddPlugin = addPlugin
-function addPlugin(name)
-	safeCall(origAddPlugin, name)
-	-- Rebuild commands after plugin load
-	task.spawn(function()
-		task.wait(0.5)
-		buildAllCommands()
-		notify("Plugin Loaded", name, 3)
-	end)
-end
-
-local origDeletePlugin = deletePlugin
-function deletePlugin(name)
-	safeCall(origDeletePlugin, name)
-	task.spawn(function()
-		task.wait(0.5)
-		buildAllCommands()
-		notify("Plugin Removed", name, 3)
-	end)
-end
-
--- ---------------------------------------------------------------------------
--- 10. Replace IY GUI-opening commands with WindUI versions
+-- 6. Built-in Tabs: Server Directory, Find Places, Settings
 -- ---------------------------------------------------------------------------
 
--- serverinfo -> WindUI dialog
-local origServerInfo = nil
-for i, cmd in pairs(cmds) do
-	if cmd.NAME == "serverinfo" then
-		origServerInfo = cmd.FUNC
-		break
-	end
-end
-overridecmd("serverinfo", function(args, speaker)
-	local Asset = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
-	local players = Players:GetPlayers()
-	local seconds = math.floor(workspace.DistributedGameTime)
-	local minutes = math.floor(seconds / 60)
-	local hours = math.floor(minutes / 60)
-	seconds = seconds - (minutes * 60)
-	minutes = minutes - (hours * 60)
-	local timeStr = (hours > 0 and hours .. "h " or "") .. (minutes > 0 and minutes .. "m " or "") .. seconds .. "s"
-
-	WindUI:Dialog({
-		Title = "Server Info",
-		Content = string.format(
-			"Place: %s\nPlace ID: %s\nJob ID: %s\nPlayers: %d/%s\nRun time: %s\nPlayer ID: %s",
-			Asset.Name, game.PlaceId, game.JobId, #players, game:GetService("Players").MaxPlayers or "?", timeStr, LocalPlayer.UserId
-		),
-		Buttons = {
-			{ Title = "Copy Place ID", Variant = "Tertiary", Callback = function()
-				if setclipboard then setclipboard(tostring(game.PlaceId)) end
-			end },
-			{ Title = "Copy Job ID", Variant = "Tertiary", Callback = function()
-				if setclipboard then setclipboard(tostring(game.JobId)) end
-			end },
-			{ Title = "Close", Variant = "Primary" },
-		}
-	})
-end)
-
--- logs / chatlogs / joinlogs -> WindUI log viewer
-local logWindowOpen = false
-overridecmd("logs", function(args, speaker)
-	if logWindowOpen then return end
-	logWindowOpen = true
-	-- Create a simple scrollable log display via WindUI section tab
-	local logSection = Window:Section({ Title = "Logs", Opened = true })
-	local logTab = logSection:Tab({ Title = "Chat Logs", Icon = "message-circle" })
-
-	logTab:Paragraph({
-		Title = "Chat Logs",
-		Desc = "Logs enabled. Check console output for messages (WindUI log viewer coming soon).",
-	})
-
-	logTab:Button({
-		Title = "Clear Logs",
-		Callback = function()
-			if scroll_2 then
-				for _, child in pairs(scroll_2:GetChildren()) do child:Destroy() end
-			end
-			notify("Logs Cleared", "", 2)
-		end,
-	})
-
-	logTab:Button({
-		Title = "Close",
-		Callback = function()
-			logWindowOpen = false
-		end,
-	})
-end)
-
-overridecmd("chatlogs", function(args, speaker)
-	execCommand("logs")
-end)
-
-overridecmd("joinlogs", function(args, speaker)
-	execCommand("logs")
-end)
-
--- hideiy / showiy -> WindUI window visibility
-overridecmd("hideiy", function(args, speaker)
-	if Window then
-		-- WindUI doesn't have a direct hide; we can hide the OpenButton
-		notify("IY Hidden", "Press the OpenButton to restore", 3)
-	end
-end)
-
-overridecmd("showiy", function(args, speaker)
-	notify("IY Shown", "", 3)
-end)
-
--- keybinds -> open IY keybind editor (hidden) or WindUI equivalent
-overridecmd("keybinds", function(args, speaker)
-	if KeybindsFrame then
-		KeybindsFrame.Visible = true
-		SettingsHolder.Visible = false
-	end
-	notify("Keybinds", "Use IY keybind editor (WindUI keybind manager coming soon)", 3)
-end)
-
--- plugins -> WindUI plugin manager
-local pluginWindowOpen = false
-overridecmd("plugins", function(args, speaker)
-	if pluginWindowOpen then return end
-	pluginWindowOpen = true
-	local pluginSection = Window:Section({ Title = "Plugins", Opened = true })
-	local pluginTab = pluginSection:Tab({ Title = "Plugins", Icon = "plug" })
-
-	pluginTab:Input({
-		Title = "Plugin File Name",
-		Placeholder = "myplugin.iy",
-		Callback = function(value)
-			_G.IY_PLUGIN_NAME = value
-		end,
-	})
-
-	pluginTab:Button({
-		Title = "Add Plugin",
-		Callback = function()
-			local name = _G.IY_PLUGIN_NAME or ""
-			if name ~= "" then
-				addPlugin(name)
-			end
-		end,
-	})
-
-	pluginTab:Button({
-		Title = "Add All Plugins",
-		Callback = function()
-			if addallplugins then addallplugins() end
-		end,
-	})
-
-	pluginTab:Button({
-		Title = "Close",
-		Callback = function()
-			pluginWindowOpen = false
-		end,
-	})
-end)
-
--- ---------------------------------------------------------------------------
--- 11. Settings tab in WindUI
--- ---------------------------------------------------------------------------
-local settingsSection = Window:Section({ Title = "Settings", Opened = true })
-local settingsTab = settingsSection:Tab({ Title = "Settings", Icon = "sliders" })
-
-settingsTab:Input({
-	Title = "Command Prefix",
-	Value = prefix,
-	Callback = function(value)
-		prefix = value or "/"
-		if PrefixBox then PrefixBox.Text = prefix end
-		if Cmdbar then Cmdbar.PlaceholderText = "Command Bar (" .. prefix .. ")" end
-		if isFunction(updatesaves) then updatesaves() end
-	end,
-})
-
-settingsTab:Toggle({
-	Title = "Keep Infinite Yield on Teleport",
-	Value = KeepInfYield or false,
-	Callback = function(state)
-		KeepInfYield = state
-		if isFunction(updatesaves) then updatesaves() end
-	end,
-})
-
-settingsTab:Toggle({
-	Title = "Chat Logs",
-	Value = logsEnabled or false,
-	Callback = function(state)
-		logsEnabled = state
-		if Toggle then Toggle.Text = state and "Enabled" or "Disabled" end
-		if isFunction(updatesaves) then updatesaves() end
-	end,
-})
-
-settingsTab:Toggle({
-	Title = "Join Logs",
-	Value = jLogsEnabled or false,
-	Callback = function(state)
-		jLogsEnabled = state
-		if Toggle_2 then Toggle_2.Text = state and "Enabled" or "Disabled" end
-		if isFunction(updatesaves) then updatesaves() end
-	end,
-})
-
-settingsTab:Slider({
-	Title = "GUI Scale",
-	Value = { Min = 0.4, Max = 2, Default = guiScale or 1 },
-	Callback = function(value)
-		guiScale = value
-		if Scale then Scale.Scale = math.max(Holder.AbsoluteSize.X / 1920, guiScale) end
-		if isFunction(updatesaves) then updatesaves() end
-	end,
-})
-
--- Theme dropdown
-local themes = WindUI:GetThemes()
-local themeList = {}
-for name, _ in pairs(themes) do table.insert(themeList, name) end
-table.sort(themeList)
-
-settingsTab:Dropdown({
-	Title = "Theme",
-	Values = themeList,
-	Value = WindUI:GetCurrentTheme(),
-	Callback = function(themeName)
-		WindUI:SetTheme(themeName)
-	end,
-})
-
--- Waypoints quick access
-local wpSection = Window:Section({ Title = "Waypoints", Opened = true })
-local wpTab = wpSection:Tab({ Title = "Waypoints", Icon = "map-pin" })
-
-wpTab:Input({
-	Title = "Waypoint Name",
-	Placeholder = "Enter name",
-	Callback = function(value)
-		_G.IY_WP_NAME = value
-	end,
-})
-
-wpTab:Button({
-	Title = "Set Waypoint",
-	Callback = function()
-		local name = _G.IY_WP_NAME or "Waypoint"
-		execCmd("setwaypoint " .. name)
-	end,
-})
-
-wpTab:Button({
-	Title = "Refresh Waypoints",
-	Callback = function()
-		if isFunction(refreshwaypoints) then refreshwaypoints() end
-	end,
-})
-
--- Aliases quick access
-local aliasSection = Window:Section({ Title = "Aliases", Opened = true })
-local aliasTab = aliasSection:Tab({ Title = "Aliases", Icon = "share-2" })
-
-aliasTab:Input({
-	Title = "Command",
-	Placeholder = "Command name",
-	Callback = function(value) _G.IY_ALIAS_CMD = value end,
-})
-
-aliasTab:Input({
-	Title = "Alias",
-	Placeholder = "Alias name",
-	Callback = function(value) _G.IY_ALIAS_NAME = value end,
-})
-
-aliasTab:Button({
-	Title = "Add Alias",
-	Callback = function()
-		local cmd = _G.IY_ALIAS_CMD or ""
-		local alias = _G.IY_ALIAS_NAME or ""
-		if cmd ~= "" and alias ~= "" then
-			execCmd("addalias " .. cmd .. " " .. alias)
-		end
-	end,
-})
-
-aliasTab:Button({
-	Title = "Clear All Aliases",
-	Callback = function()
-		execCmd("clraliases")
-	end,
-})
-
--- ---------------------------------------------------------------------------
--- Built-in Plugins (Find Places, Server Directory)
--- These are integrated as WindUI tabs above. No separate .iy plugin loading needed.
--- ---------------------------------------------------------------------------
-
--- These replace the plugins' own commands/UI with our WindUI interface.
--- ---------------------------------------------------------------------------
-
--- Helper to get the plugin command function from cmds table (set by LoadPlugin)
-local function getPluginCmdFunc(cmdName)
-	for _, cmd in pairs(cmds) do
-		if cmd.NAME:lower() == cmdName:lower() and cmd.FUNC then
-			return cmd.FUNC
-		end
-	end
-	return nil
-end
-
--- ===== ServerDirectory Tab =====
+-- Server Directory Tab
 local sdSection = Window:Section({ Title = "Server Directory", Opened = true })
 local sdTab = sdSection:Tab({ Title = "Server Directory", Icon = "server" })
 
 sdTab:Input({
 	Title = "Place ID",
-	Placeholder = "Enter Place ID",
-	Value = tostring(game.PlaceId),
+	Placeholder = tostring(PlaceId),
 	Callback = function(value)
 		_G.SD_PlaceID = value
 	end,
@@ -15047,14 +13705,14 @@ sdTab:Button({
 	Title = "Fetch Servers",
 	Icon = "refresh-cw",
 	Callback = function()
-		local placeId = tonumber(_G.SD_PlaceID or game.PlaceId)
+		local placeId = tonumber(_G.SD_PlaceID or PlaceId)
 		if not placeId then
 			notify("Server Directory", "Invalid Place ID", 3)
-			return end
+			return
+		end
 		notify("Server Directory", "Fetching servers...", 3)
 		task.spawn(function()
-			local ok, servers = pcall(function()
-				local HttpService = game:GetService("HttpService")
+			local ok, result = pcall(function()
 				local req = game:HttpGet(string.format(
 					"https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId))
 				local body = HttpService:JSONDecode(req)
@@ -15071,9 +13729,9 @@ sdTab:Button({
 				end
 				return {}
 			end)
-			if ok and #servers > 0 then
-				_G.SD_ServerList = servers
-				notify("Server Directory", #servers .. " servers found", 3)
+			if ok and #result > 0 then
+				_G.SD_ServerList = result
+				notify("Server Directory", #result .. " servers found", 3)
 			else
 				notify("Server Directory", "No servers found", 3)
 			end
@@ -15085,13 +13743,11 @@ sdTab:Button({
 	Title = "Join Current Server",
 	Icon = "log-in",
 	Callback = function()
-		local TeleportService = game:GetService("TeleportService")
-		local Players = game:GetService("Players")
-		TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, Players.LocalPlayer)
+		TeleportService:TeleportToPlaceInstance(PlaceId, JobId, LocalPlayer)
 	end,
 })
 
--- ===== Find Places Tab =====
+-- Find Places Tab
 local fpSection = Window:Section({ Title = "Find Places", Opened = true })
 local fpTab = fpSection:Tab({ Title = "Find Places", Icon = "search" })
 
@@ -15116,58 +13772,67 @@ fpTab:Button({
 	end,
 })
 
--- ===== Plugin Store Tab =====
-local psSection = Window:Section({ Title = "Plugin Store", Opened = true })
-local psTab = psSection:Tab({ Title = "Plugin Store", Icon = "store" })
+-- Settings Tab
+local settingsSection = Window:Section({ Title = "Settings", Opened = true })
+local settingsTab = settingsSection:Tab({ Title = "Settings", Icon = "sliders" })
 
-psTab:Paragraph({
-	Title = "IY Plugin Store",
-	Desc = "Browse and load additional Infinite Yield plugins.",
-})
-
-psTab:Paragraph({
-	Title = "Built-in Plugins",
-	Desc = "Find Places and Server Directory are integrated as WindUI tabs above.",
-})
-
-psTab:Paragraph({
-	Title = "Additional Plugins",
-	Desc = "Add .iy files to the @plugins\\ folder and use /addplugin to load them.",
-})
-
-psTab:Button({
-	Title = "Refresh Plugin List",
-	Icon = "refresh-cw",
-	Callback = function()
-		if isFunction(buildAllCommands) then
-			buildAllCommands()
-		end
-		notify("Plugin Store", "Plugin list refreshed", 3)
+settingsTab:Input({
+	Title = "Command Prefix",
+	Value = prefix,
+	Callback = function(value)
+		prefix = value or "/"
+		notify("Prefix", "Prefix set to: " .. prefix, 3)
 	end,
 })
 
--- ===== ServerDirectory Plugin Command Integration =====
--- If the ServerDirectory plugin is loaded, expose its toggle through our tab
-local sdFunc = getPluginCmdFunc("sd")
-if sdFunc then
-	sdTab:Button({
-		Title = "Open Server Directory Window (Plugin)",
-		Icon = "window",
-		Callback = function()
-			safeCall(sdFunc, {}, LocalPlayer)
-		end,
-	})
+settingsTab:Toggle({
+	Title = "Keep IY on Teleport",
+	Value = KeepInfYield or false,
+	Callback = function(state)
+		KeepInfYield = state
+	end,
+})
+
+settingsTab:Toggle({
+	Title = "Chat Logs",
+	Value = logsEnabled or false,
+	Callback = function(state)
+		logsEnabled = state
+	end,
+})
+
+settingsTab:Slider({
+	Title = "GUI Scale",
+	Value = { Min = 0.4, Max = 2, Default = guiScale or 1 },
+	Callback = function(value)
+		guiScale = value
+	end,
+})
+
+local themes = WindUI:GetThemes()
+local themeList = {}
+for name, _ in pairs(themes) do
+	table.insert(themeList, name)
 end
+table.sort(themeList)
+
+settingsTab:Dropdown({
+	Title = "Theme",
+	Values = themeList,
+	Value = WindUI:GetCurrentTheme(),
+	Callback = function(themeName)
+		WindUI:SetTheme(themeName)
+	end,
+})
 
 -- ---------------------------------------------------------------------------
--- 12. Init notification
+-- 7. Init Notification
 -- ---------------------------------------------------------------------------
 WindUI:Notify({
 	Title = "Infinite Yield v" .. tostring(currentVersion or "6.4.2"),
-	Content = "WindUI loaded. Default prefix: /. Type /cmdbar for IY command bar.",
+	Content = "WindUI plugin loaded. Default prefix: /",
 	Duration = 5,
 	Icon = "zap",
 })
 
---[[ </our_code> ]]
-</our_code>
+print("[IY-WindUI] Plugin initialized successfully")
