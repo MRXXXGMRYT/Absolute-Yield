@@ -1,0 +1,21 @@
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp / build
+*.tmp
+*.bak
+*.log
+tmp_*
+final_merged.lua
+merged_source.lua
+wrapper_code.lua
+
+# Dependencies / packages
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
