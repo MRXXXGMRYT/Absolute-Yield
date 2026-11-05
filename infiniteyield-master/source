@@ -13517,14 +13517,40 @@ local function tryRequire(path)
 	return nil
 end
 
--- Adjust these paths to match your setup where WindUI lives as ModuleScripts.
+-- ---------------------------------------------------------------------------
+-- 3. Load WindUI
+-- ---------------------------------------------------------------------------
+-- LOADSTRING URL (when pushing to GitHub):
+--   https://raw.githubusercontent.com/USERNAME/REPO/main/infiniteyield-master/source
+--
+-- WindUI must be available as ModuleScripts in the game.
+-- For loadstring deployment, place WindUI in ReplicatedStorage as a folder
+-- named "WindUI" with src/Init.lua as the entry point.
+-- ---------------------------------------------------------------------------
+local WindUI = nil
+local loadErrors = {}
+
+local function tryRequire(path)
+	local ok, result = pcall(function()
+		return require(path)
+	end)
+	if ok then return result end
+	table.insert(loadErrors, path .. ": " .. tostring(result))
+	return nil
+end
+
+-- Try absolute paths first (work with loadstring deployment when WindUI is
+-- in ReplicatedStorage), then relative paths (work in Studio).
 local candidatePaths = {
+	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI')",
+	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI'):WaitForChild('src'):WaitForChild('Init')",
+	"game:GetService('ServerStorage'):WaitForChild('WindUI')",
+	"game:GetService('ServerStorage'):WaitForChild('WindUI'):WaitForChild('src'):WaitForChild('Init')",
 	"../WindUI/src/Init",
 	"./WindUI/src/Init",
 	"./src/Init",
 	"WindUI",
 	"src/Init",
-	"game:GetService('ReplicatedStorage'):WaitForChild('WindUI')",
 }
 
 for _, path in ipairs(candidatePaths) do
@@ -13532,9 +13558,36 @@ for _, path in ipairs(candidatePaths) do
 	if WindUI then break end
 end
 
+-- Last-resort fallback: try to download WindUI Init.lua from GitHub raw
+-- Replace USERNAME and REPO with your GitHub details
+if not WindUI then
+	local GITHUB_USER = "USERNAME" -- <-- REPLACE WITH YOUR GITHUB USERNAME
+	local GITHUB_REPO = "REPO"     -- <-- REPLACE WITH YOUR GITHUB REPO NAME
+	local GITHUB_REF = "main"      -- branch or tag
+	local winduiInitUrl = string.format(
+		"https://raw.githubusercontent.com/%s/%s/%s/WindUI/src/Init.lua",
+		GITHUB_USER, GITHUB_REPO, GITHUB_REF
+	)
+	local ok, result = pcall(function()
+		local code = game:HttpGet(winduiInitUrl)
+		if code and code ~= "" then
+			local fn = loadstring(code)
+			if type(fn) == "function" then
+				return fn()
+			end
+		end
+		return nil
+	end)
+	if ok and result then
+		WindUI = result
+	else
+		warn("[IY-WindUI] Could not load WindUI from GitHub raw:", winduiInitUrl)
+	end
+end
+
 if not WindUI then
 	warn("WindUI could not be loaded. Tried:\n" .. table.concat(loadErrors, "\n"))
-	warn("Make sure WindUI is available as a ModuleScript and adjust the require path in wrapper_code.lua")
+	warn("For loadstring: put WindUI in ReplicatedStorage, or set GITHUB_USER/GITHUB_REPO above.")
 	return
 end
 
