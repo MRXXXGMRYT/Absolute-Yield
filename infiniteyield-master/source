@@ -13553,17 +13553,100 @@ local candidatePaths = {
 	"src/Init",
 }
 
-for _, path in ipairs(candidatePaths) do
-	WindUI = tryRequire(path)
-	if WindUI then break end
+-- ---------------------------------------------------------------------------
+-- WindUI Loader with diagnostics (reports to Roblox console)
+-- ---------------------------------------------------------------------------
+local diag = {} -- diagnostic messages printed to console at the end
+
+local function diagLog(level, msg, fix)
+	table.insert(diag, {level = level, msg = msg, fix = fix or ""})
+	print(string.format("[IY-WindUI][%s] %s%s", level, msg, fix ~= "" and (" | FIX: " .. fix) or ""))
 end
 
--- Last-resort fallback: try to download WindUI Init.lua from GitHub raw
--- Replace USERNAME and REPO with your GitHub details
+local GITHUB_USER = "MRXXXGMRYT"
+local GITHUB_REPO = "Absolute-Yield"
+local GITHUB_REF = "main"
+
+local function downloadWindUIToReplicatedStorage()
+	-- Try to download the full WindUI Init.lua and place it in ReplicatedStorage
+	-- so require() can find it automatically.
+	local success, result = pcall(function()
+		local HttpService = game:GetService("HttpService")
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+		-- Download Init.lua
+		local initUrl = string.format(
+			"https://raw.githubusercontent.com/%s/%s/%s/WindUI/src/Init.lua",
+			GITHUB_USER, GITHUB_REPO, GITHUB_REF
+		)
+		local initCode = game:HttpGet(initUrl)
+		if not initCode or initCode == "" then
+			return false, "Init.lua download failed"
+		end
+
+		-- Create WindUI folder in ReplicatedStorage
+		local winduiFolder = ReplicatedStorage:FindFirstChild("WindUI")
+		if not winduiFolder then
+			winduiFolder = Instance.new("Folder")
+			winduiFolder.Name = "WindUI"
+			winduiFolder.Parent = ReplicatedStorage
+		end
+
+		local srcFolder = winduiFolder:FindFirstChild("src")
+		if not srcFolder then
+			srcFolder = Instance.new("Folder")
+			srcFolder.Name = "src"
+			srcFolder.Parent = winduiFolder
+		end
+
+		local initModule = srcFolder:FindFirstChild("Init")
+		if not initModule then
+			initModule = Instance.new("ModuleScript")
+			initModule.Name = "Init"
+			initModule.Parent = srcFolder
+		end
+		initModule.Source = initCode
+
+		return true, "WindUI placed in ReplicatedStorage"
+	end)
+
+	if success then
+		diagLog("INFO", "Auto-installed WindUI into ReplicatedStorage", "Require should now work on next run")
+		return true
+	else
+		diagLog("WARN", "Auto-install to ReplicatedStorage failed: " .. tostring(result), "WindUI may not be in the game")
+		return false
+	end
+end
+
+-- Step 1: Try local require paths
+for _, path in ipairs(candidatePaths) do
+	WindUI = tryRequire(path)
+	if WindUI then
+		diagLog("INFO", "WindUI loaded via require: " .. tostring(path))
+		break
+	end
+end
+
+-- Step 2: If not loaded, try to auto-install WindUI into ReplicatedStorage from GitHub
 if not WindUI then
-	local GITHUB_USER = "USERNAME" -- <-- REPLACE WITH YOUR GITHUB USERNAME
-	local GITHUB_REPO = "REPO"     -- <-- REPLACE WITH YOUR GITHUB REPO NAME
-	local GITHUB_REF = "main"      -- branch or tag
+	diagLog("INFO", "WindUI not found locally; attempting auto-install from GitHub raw...")
+	if downloadWindUIToReplicatedStorage() then
+		-- Retry require after auto-install
+		task.wait(0.5)
+		for _, path in ipairs(candidatePaths) do
+			WindUI = tryRequire(path)
+			if WindUI then
+				diagLog("INFO", "WindUI loaded after auto-install: " .. tostring(path))
+				break
+			end
+		end
+	end
+end
+
+-- Step 3: Last resort - load Init.lua directly from GitHub raw via loadstring
+if not WindUI then
+	diagLog("INFO", "Attempting direct loadstring from GitHub raw...")
 	local winduiInitUrl = string.format(
 		"https://raw.githubusercontent.com/%s/%s/%s/WindUI/src/Init.lua",
 		GITHUB_USER, GITHUB_REPO, GITHUB_REF
@@ -13580,16 +13663,33 @@ if not WindUI then
 	end)
 	if ok and result then
 		WindUI = result
+		diagLog("INFO", "WindUI loaded via GitHub raw loadstring", "No local files needed")
 	else
-		warn("[IY-WindUI] Could not load WindUI from GitHub raw:", winduiInitUrl)
+		diagLog("ERROR", "GitHub raw loadstring failed: " .. winduiInitUrl, "Check internet/GH raw access")
 	end
 end
 
+-- Step 4: Final failure - detailed diagnostics
 if not WindUI then
-	warn("WindUI could not be loaded. Tried:\n" .. table.concat(loadErrors, "\n"))
-	warn("For loadstring: put WindUI in ReplicatedStorage, or set GITHUB_USER/GITHUB_REPO above.")
+	diagLog("ERROR", "WindUI could not be loaded after all attempts", "")
+
+	print("\n========== [IY-WindUI] DIAGNOSTICS ==========")
+	for _, d in ipairs(diag) do
+		print(string.format("[%s] %s%s", d.level, d.msg, d.fix ~= "" and ("  -> " .. d.fix) or ""))
+	end
+	print("--------------------------------------------")
+	print("LOAD ERRORS (require attempts):")
+	for _, err in ipairs(loadErrors) do
+		print("  - " .. err)
+	end
+	print("============================================\n")
+
+	warn("Infinite Yield will continue with engine-only mode (no WindUI UI).")
+	warn("Commands still work via /cmdbar or chat, but WindUI interface is unavailable.")
 	return
 end
+
+diagLog("INFO", "WindUI ready. Initializing interface...")
 
 -- ---------------------------------------------------------------------------
 -- 4. Create WindUI Window
